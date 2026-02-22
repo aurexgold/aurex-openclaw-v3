@@ -1,0 +1,75 @@
+#!/bin/bash
+# deploy.sh — One-shot deployment script for Aurex OpenClaw v3 (dev/testnet)
+
+set -e
+
+# 1️⃣ Update VPS and install essentials
+echo "[INFO] Installing dependencies..."
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y git curl wget ufw docker.io docker-compose npm nodejs
+
+sudo systemctl enable docker --now
+
+# 2️⃣ Configure firewall
+echo "[INFO] Configuring firewall..."
+sudo ufw allow 22/tcp
+sudo ufw allow 80,443,8545/tcp
+sudo ufw --force enable
+
+# 3️⃣ Clone or pull latest repo
+REPO_URL="https://github.com/aurexgold/aurex-openclaw-v3.git"
+DEST_DIR="/opt/aurex-openclaw-v3"
+
+if [ -d "$DEST_DIR" ]; then
+    echo "[INFO] Repo exists. Pulling latest changes..."
+    cd "$DEST_DIR"
+    git pull
+else
+    echo "[INFO] Cloning repository..."
+    git clone "$REPO_URL" "$DEST_DIR"
+    cd "$DEST_DIR"
+fi
+
+# 4️⃣ Create .env if missing
+if [ ! -f ".env" ]; then
+    echo "[INFO] Creating sample .env file..."
+    cat <<EOL > .env
+RPC_HOST=0.0.0.0
+RPC_PORT=8545
+AI_ROLE_KEY=<AI_PRIVATE_KEY>
+FAUCET_KEY=<FAUCET_PRIVATE_KEY>
+EOL
+    echo "[WARN] Edit .env file with real keys!"
+fi
+
+# 5️⃣ Pull and start Docker stack
+echo "[INFO] Starting Docker stack..."
+sudo docker compose pull
+sudo docker compose up -d
+
+# 6️⃣ Build frontends
+echo "[INFO] Building DAO frontend..."
+cd frontend-dao
+npm install
+npm run build
+npx serve -s build &
+
+echo "[INFO] Building Validator Dashboard frontend..."
+cd ../frontend-validator
+npm install
+npm run build
+npx serve -s build &
+
+cd "$DEST_DIR"
+
+# 7️⃣ Optional TLS setup instructions
+echo "[INFO] TLS Setup (optional):"
+echo "Run the following command once with your dev/test domain:"
+echo "docker compose run --rm certbot certonly --webroot --webroot-path=/var/www/certbot -d test.aurexgold.com --email admin@aurexgold.com --agree-tos --no-eff-email"
+echo "Then restart Nginx: docker compose restart nginx"
+
+# 8️⃣ Verify containers
+echo "[INFO] Listing running containers..."
+sudo docker ps
+
+echo "[SUCCESS] Aurex OpenClaw v3 dev/testnet deployment finished!"
