@@ -1,0 +1,27 @@
+version: "3.9"
+
+services:
+  validator:
+    image: ethereum/client-go:stable
+    command: --dev --http --http.addr 0.0.0.0 --http.port 8545
+    ports:
+      - "8545:8545"
+
+  ai-engine:
+    build: ./ai-engine
+    container_name: ai_engine
+    ports:
+      - "8000:8000"
+
+  faucet:
+    build: ./faucet
+    container_name: faucet
+    ports:
+      - "5000:5000"
+
+  nginx:
+    image: nginx:latest
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
